@@ -1,0 +1,622 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Search Bot</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e4e4e7;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 0;
+        }
+
+        .logo {
+            font-size: 3rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: #a1a1aa;
+            margin-bottom: 30px;
+        }
+
+        .search-section {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .search-form {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 300px;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: #e4e4e7;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #4ecdc4;
+            box-shadow: 0 0 20px rgba(78, 205, 196, 0.3);
+        }
+
+        .search-input::placeholder {
+            color: #a1a1aa;
+        }
+
+        .results-input {
+            width: 120px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: #e4e4e7;
+            font-size: 16px;
+        }
+
+        .search-btn {
+            padding: 15px 30px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(255, 107, 107, 0.4);
+        }
+
+        .search-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #4ecdc4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ecdc4;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .results-section {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .results-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #e4e4e7;
+        }
+
+        .results-count {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .video-card {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .video-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+            border-color: rgba(78, 205, 196, 0.5);
+        }
+
+        .video-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            line-height: 1.4;
+            color: #e4e4e7;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .video-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .video-channel {
+            color: #4ecdc4;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .video-views {
+            color: #a1a1aa;
+            font-size: 12px;
+        }
+
+        .video-duration {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: white;
+        }
+
+        .video-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #ff6b6b;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .video-link:hover {
+            color: #ff5252;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #a1a1aa;
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .error-message {
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 60px;
+            padding: 40px 0;
+            color: #a1a1aa;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .search-section {
+                padding: 20px;
+            }
+            
+            .search-form {
+                flex-direction: column;
+            }
+            
+            .search-input {
+                min-width: auto;
+            }
+            
+            .video-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .logo {
+                font-size: 2rem;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <i class="fab fa-youtube"></i> SearchBot
+            </div>
+            <p class="subtitle">Advanced YouTube Search with ML-powered behavior modeling</p>
+        </div>
+
+        <div class="search-section">
+            <div class="search-form">
+                <input type="text" id="searchInput" class="search-input" placeholder="Enter your search query..." />
+                <input type="number" id="maxResults" class="results-input" value="20" min="1" max="100" />
+                <button id="searchBtn" class="search-btn">
+                    <i class="fas fa-search"></i> Search
+                </button>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <span>Searching with human-like behavior...</span>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <div class="status-bar" id="statusBar" style="display: none;">
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <span>Status: <span id="searchStatus">-</span></span>
+                </div>
+                <div class="status-item">
+                    <i class="fas fa-clock"></i>
+                    <span>Duration: <span id="searchDuration">-</span>ms</span>
+                </div>
+                <div class="status-item">
+                    <i class="fas fa-robot"></i>
+                    <span>Active Searches: <span id="activeSearches">-</span></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-section">
+            <div class="results-header">
+                <h2 class="results-title">Search Results</h2>
+                <div class="results-count" id="resultsCount" style="display: none;">0 videos</div>
+            </div>
+
+            <div class="video-grid" id="videoGrid">
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3>Start Your Search</h3>
+                    <p>Enter a keyword above to find YouTube videos with our advanced search bot</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Powered by ML-based behavior modeling • Built for Replit</p>
+        </div>
+    </div>
+
+    <script>
+        let currentSearchId = null;
+        let statusCheckInterval = null;
+
+        // DOM elements
+        const searchInput = document.getElementById('searchInput');
+        const maxResults = document.getElementById('maxResults');
+        const searchBtn = document.getElementById('searchBtn');
+        const loading = document.getElementById('loading');
+        const errorMessage = document.getElementById('errorMessage');
+        const statusBar = document.getElementById('statusBar');
+        const videoGrid = document.getElementById('videoGrid');
+        const resultsCount = document.getElementById('resultsCount');
+
+        // Status elements
+        const searchStatus = document.getElementById('searchStatus');
+        const searchDuration = document.getElementById('searchDuration');
+        const activeSearches = document.getElementById('activeSearches');
+
+        // Event listeners
+        searchBtn.addEventListener('click', performSearch);
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        // Load system status on page load
+        loadSystemStatus();
+        setInterval(loadSystemStatus, 10000); // Update every 10 seconds
+
+        async function performSearch() {
+            const keyword = searchInput.value.trim();
+            if (!keyword) {
+                showError('Please enter a search keyword');
+                return;
+            }
+
+            setLoading(true);
+            hideError();
+            clearResults();
+
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        keyword: keyword,
+                        maxResults: parseInt(maxResults.value)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    currentSearchId = data.search_id;
+                    statusBar.style.display = 'flex';
+                    searchStatus.textContent = data.status;
+                    
+                    // Start polling for results
+                    startStatusPolling();
+                } else {
+                    showError(data.error || 'Search failed');
+                    setLoading(false);
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+                setLoading(false);
+            }
+        }
+
+        function startStatusPolling() {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+
+            statusCheckInterval = setInterval(async () => {
+                if (!currentSearchId) return;
+
+                try {
+                    const response = await fetch(`/api/search/${currentSearchId}`);
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        searchStatus.textContent = data.status;
+                        
+                        if (data.duration_ms) {
+                            searchDuration.textContent = data.duration_ms;
+                        }
+
+                        if (data.status === 'completed') {
+                            displayResults(data.results || []);
+                            setLoading(false);
+                            clearInterval(statusCheckInterval);
+                        } else if (data.status === 'failed') {
+                            showError(data.error || 'Search failed');
+                            setLoading(false);
+                            clearInterval(statusCheckInterval);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Status check error:', error);
+                }
+            }, 2000);
+        }
+
+        async function loadSystemStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                if (response.ok) {
+                    activeSearches.textContent = data.active_searches;
+                }
+            } catch (error) {
+                console.error('System status error:', error);
+            }
+        }
+
+        function displayResults(results) {
+            videoGrid.innerHTML = '';
+            
+            if (results.length === 0) {
+                videoGrid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <i class="fas fa-search-minus"></i>
+                        </div>
+                        <h3>No Results Found</h3>
+                        <p>Try a different search term or check your spelling</p>
+                    </div>
+                `;
+                resultsCount.style.display = 'none';
+                return;
+            }
+
+            resultsCount.style.display = 'block';
+            resultsCount.textContent = `${results.length} video${results.length !== 1 ? 's' : ''}`;
+
+            results.forEach(video => {
+                const videoCard = createVideoCard(video);
+                videoGrid.appendChild(videoCard);
+            });
+        }
+
+        function createVideoCard(video) {
+            const card = document.createElement('div');
+            card.className = 'video-card';
+            
+            card.innerHTML = `
+                <div class="video-title">${escapeHtml(video.title)}</div>
+                <div class="video-meta">
+                    <div class="video-channel">
+                        <i class="fas fa-user-circle"></i> ${escapeHtml(video.channel)}
+                    </div>
+                    ${video.duration ? `<div class="video-duration">${escapeHtml(video.duration)}</div>` : ''}
+                </div>
+                <div class="video-views">${escapeHtml(video.views)}</div>
+                <a href="${video.url}" target="_blank" class="video-link">
+                    <i class="fas fa-external-link-alt"></i>
+                    Watch on YouTube
+                </a>
+            `;
+
+            card.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'A') {
+                    window.open(video.url, '_blank');
+                }
+            });
+
+            return card;
+        }
+
+        function setLoading(isLoading) {
+            loading.style.display = isLoading ? 'flex' : 'none';
+            searchBtn.disabled = isLoading;
+            searchBtn.innerHTML = isLoading 
+                ? '<i class="fas fa-spinner fa-spin"></i> Searching...' 
+                : '<i class="fas fa-search"></i> Search';
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        function hideError() {
+            errorMessage.style.display = 'none';
+        }
+
+        function clearResults() {
+            resultsCount.style.display = 'none';
+            videoGrid.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3>Start Your Search</h3>
+                    <p>Enter a keyword above to find YouTube videos with our advanced search bot</p>
+                </div>
+            `;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
