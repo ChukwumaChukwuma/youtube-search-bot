@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 import json
 import logging
 from collections import defaultdict
-import aioredis
 import uvicorn
 from contextlib import asynccontextmanager
 import os
