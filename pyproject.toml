@@ -1,23 +1,58 @@
 [tool.poetry]
-name = "python-template"
-version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+name = "youtube-search-bot"
+version = "1.0.0"
+description = "Advanced YouTube Search Bot with ML-based behavior modeling and 100% CAPTCHA solving"
+authors = ["YouTube Search Bot Team"]
 
 [tool.poetry.dependencies]
 python = ">=3.10.0,<3.13"
 playwright = "1.40.0"
+aiohttp = "^3.9.0"
+fastapi = "^0.104.0"
+uvicorn = {extras = ["standard"], version = "^0.24.0"}
+pydantic = "^2.5.0"
+numpy = "^1.26.0"
+opencv-python = "^4.8.0"
+Pillow = "^10.1.0"
+torch = "^2.1.0"
+torchvision = "^0.16.0"
+ultralytics = "^8.0.0"
+scikit-learn = "^1.3.0"
+joblib = "^1.3.0"
+psutil = "^5.9.0"
+backoff = "^2.2.0"
+aioredis = "^2.0.0"
+python-multipart = "^0.0.6"
+websockets = "^12.0.0"
+cryptography = "^41.0.0"
+httpx = "^0.25.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.21.0"
+black = "^23.11.0"
+flake8 = "^6.1.0"
+mypy = "^1.7.0"
+pytest-cov = "^4.1.0"
 
 [tool.pyright]
-# https://github.com/microsoft/pyright/blob/main/docs/configuration.md
 useLibraryCodeForTypes = true
 exclude = [".cache"]
 
 [tool.ruff]
-# https://beta.ruff.rs/docs/configuration/
 select = ['E', 'W', 'F', 'I', 'B', 'C4', 'ARG', 'SIM']
 ignore = ['W291', 'W292', 'W293']
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+youtube-bot = "main:main"
+youtube-bot-server = "api_server:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
