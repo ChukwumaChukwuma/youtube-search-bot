@@ -514,7 +514,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "api_server:app",
         host="0.0.0.0",
-        port=int(os.getenv("PORT", 8000)),
+        port=8000,
         workers=1,  # Single worker since we handle concurrency internally
         log_level="info",
         access_log=True

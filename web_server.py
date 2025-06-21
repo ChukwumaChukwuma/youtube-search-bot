@@ -11,7 +11,7 @@ app = Flask(__name__)
 app.secret_key = 'youtube-search-bot-secret-key'
 
 # API server configuration
-API_BASE_URL = 'http://localhost:8000'
+API_BASE_URL = 'http://0.0.0.0:8000'
 
 @app.route('/')
 def index():
@@ -32,35 +32,47 @@ def search():
             'keyword': keyword,
             'max_results': max_results,
             'session_id': session.get('session_id', str(uuid.uuid4()))
-        })
+        }, timeout=30)
         
         if response.status_code == 200:
             return jsonify(response.json())
         else:
             return jsonify({'error': 'Search failed'}), response.status_code
             
+    except requests.exceptions.ConnectionError:
+        return jsonify({'error': 'API server not available. Please start the API server first.'}), 503
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'API server timeout'}), 504
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/search/<search_id>')
 def get_search_results(search_id):
     try:
-        response = requests.get(f'{API_BASE_URL}/search/{search_id}')
+        response = requests.get(f'{API_BASE_URL}/search/{search_id}', timeout=30)
         if response.status_code == 200:
             return jsonify(response.json())
         else:
             return jsonify({'error': 'Search not found'}), response.status_code
+    except requests.exceptions.ConnectionError:
+        return jsonify({'error': 'API server not available'}), 503
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'API server timeout'}), 504
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/status')
 def get_status():
     try:
-        response = requests.get(f'{API_BASE_URL}/status')
+        response = requests.get(f'{API_BASE_URL}/status', timeout=10)
         if response.status_code == 200:
             return jsonify(response.json())
         else:
             return jsonify({'error': 'Status unavailable'}), 500
+    except requests.exceptions.ConnectionError:
+        return jsonify({'error': 'API server not available. Please start the API server first.'}), 503
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'API server timeout'}), 504
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

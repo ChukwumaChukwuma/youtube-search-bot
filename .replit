@@ -16,12 +16,34 @@ run = ["python3", "main.py"]
 deploymentTarget = "cloudrun"
 
 [workflows]
-runButton = "Start Web Server"
+runButton = "Start Full Stack"
 
 [[workflows.workflow]]
 name = "Start Web Server"
 author = 38222619
 mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python web_server.py"
+
+[[workflows.workflow]]
+name = "Start API Server"
+author = 38222619
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python api_server.py"
+
+[[workflows.workflow]]
+name = "Start Full Stack"
+author = 38222619
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python api_server.py"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
