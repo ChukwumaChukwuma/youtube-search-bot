@@ -80,11 +80,16 @@ class YouTubeSearchBot:
         browser = await playwright.chromium.launch(
             headless=False,  # YouTube often blocks headless
             args=launch_args,
-            proxy=proxy if proxy else None
+            proxy=proxy if proxy else None,
+            # Additional options for better compatibility
+            chromium_sandbox=False,
+            handle_sigint=False,
+            handle_sigterm=False,
+            handle_sighup=False
         )
 
         # Apply stealth scripts to all contexts
-        await browser.new_context(
+        context = await browser.new_context(
             viewport={'width': fingerprint['viewport']['width'], 'height': fingerprint['viewport']['height']},
             locale=fingerprint['locale'],
             timezone_id=fingerprint['timezone'],
@@ -386,58 +391,109 @@ class YouTubeSearchBot:
         try:
             # Navigate to YouTube with human-like timing
             await self.behavior_modeler.human_delay(1, 3)
-            await page.goto('https://www.youtube.com', wait_until='networkidle')
+
+            # Try direct search URL first (more reliable)
+            search_url = f'https://www.youtube.com/results?search_query={keyword.replace(" ", "+")}'
+            await page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
+
+            # Wait a bit for dynamic content
+            await self.behavior_modeler.human_delay(2, 4)
 
             # Check for CAPTCHA
             if await self._check_for_captcha(page):
-                await self.captcha_solver.solve_captcha(page)
+                logger.info("CAPTCHA detected, attempting to solve...")
+                if not await self.captcha_solver.solve_captcha(page):
+                    logger.error("Failed to solve CAPTCHA")
+                    # Try alternative search method
+                    await page.goto('https://www.youtube.com', wait_until='domcontentloaded')
+                    await self.behavior_modeler.human_delay(1, 2)
 
-            # Wait for search box with human-like delay
-            await self.behavior_modeler.human_delay(0.5, 2)
+                    # Use alternative search method
+                    search_box = await page.wait_for_selector('input#search', timeout=10000)
+                    if search_box:
+                        await search_box.click()
+                        await search_box.fill('')
+                        await self.behavior_modeler.human_type(page, search_box, keyword)
+                        await page.keyboard.press('Enter')
+                        await self.behavior_modeler.human_delay(2, 3)
 
-            # Type search with human-like speed
-            search_box = await page.wait_for_selector('input[id="search"]', timeout=100000)
-            await self.behavior_modeler.human_type(page, search_box, keyword)
+            # Wait for any of these possible result containers
+            result_selectors = [
+                'ytd-video-renderer',
+                'ytd-rich-item-renderer',
+                'div#contents ytd-rich-item-renderer',
+                'ytd-search-result-renderer',
+                'a#video-title',
+                'h3.title-and-badge a'
+            ]
 
-            # Click search button with human-like behavior
-            await self.behavior_modeler.human_delay(0.3, 0.8)
-            search_button = await page.wait_for_selector('button[id="search-icon-legacy"]')
-            await self.behavior_modeler.human_click(page, search_button)
+            result_found = False
+            for selector in result_selectors:
+                try:
+                    await page.wait_for_selector(selector, timeout=5000)
+                    result_found = True
+                    logger.info(f"Found results using selector: {selector}")
+                    break
+                except:
+                    continue
 
-            # Wait for results
-            await page.wait_for_selector('ytd-video-renderer', timeout=10000)
-            await self.behavior_modeler.human_delay(1, 2)
+            if not result_found:
+                logger.error("No result selectors found on page")
+                # Try to debug what's on the page
+                page_content = await page.content()
+                if "did not match any documents" in page_content:
+                    logger.error("YouTube returned 'no results' page")
+                return results
 
             # Scroll and collect results with human-like behavior
             collected = 0
             scroll_attempts = 0
-            max_scroll_attempts = 10
+            max_scroll_attempts = 15
+            consecutive_no_new = 0
 
             while collected < max_results and scroll_attempts < max_scroll_attempts:
-                # Get current videos
-                videos = await page.query_selector_all('ytd-video-renderer')
+                previous_count = collected
 
-                for video in videos[collected:]:
+                # Try multiple strategies to extract video data
+
+                # Strategy 1: Modern YouTube layout (ytd-rich-item-renderer)
+                rich_items = await page.query_selector_all('ytd-rich-item-renderer')
+                for item in rich_items[collected:]:
                     if collected >= max_results:
                         break
 
                     try:
-                        # Extract video data
-                        title_elem = await video.query_selector('h3')
-                        title = await title_elem.inner_text() if title_elem else ""
+                        # Title and link
+                        title_elem = await item.query_selector('a#video-title-link, h3 a, a#video-title')
+                        if not title_elem:
+                            continue
 
-                        link_elem = await video.query_selector('a#video-title')
-                        link = await link_elem.get_attribute('href') if link_elem else ""
-                        if link and not link.startswith('http'):
+                        title = await title_elem.inner_text()
+                        link = await title_elem.get_attribute('href')
+
+                        if not title or not link:
+                            continue
+
+                        if not link.startswith('http'):
                             link = f"https://www.youtube.com{link}"
 
-                        channel_elem = await video.query_selector('ytd-channel-name a')
-                        channel = await channel_elem.inner_text() if channel_elem else ""
+                        # Channel
+                        channel_elem = await item.query_selector('ytd-channel-name a, div#channel-info a, a.yt-formatted-string')
+                        channel = await channel_elem.inner_text() if channel_elem else "Unknown Channel"
 
-                        views_elem = await video.query_selector('span.ytd-video-meta-block')
-                        views = await views_elem.inner_text() if views_elem else ""
+                        # Views and upload time
+                        metadata_elem = await item.query_selector('div#metadata-line')
+                        if metadata_elem:
+                            metadata_text = await metadata_elem.inner_text()
+                            metadata_parts = metadata_text.split('\n')
+                            views = metadata_parts[0] if len(metadata_parts) > 0 else ""
+                            upload_time = metadata_parts[1] if len(metadata_parts) > 1 else ""
+                        else:
+                            views = ""
+                            upload_time = ""
 
-                        duration_elem = await video.query_selector('span.ytd-thumbnail-overlay-time-status-renderer')
+                        # Duration
+                        duration_elem = await item.query_selector('span.ytd-thumbnail-overlay-time-status-renderer, ytd-thumbnail-overlay-time-status-renderer span')
                         duration = await duration_elem.inner_text() if duration_elem else ""
 
                         results.append({
@@ -446,24 +502,103 @@ class YouTubeSearchBot:
                             'channel': channel.strip(),
                             'views': views.strip(),
                             'duration': duration.strip(),
+                            'upload_time': upload_time.strip(),
                             'search_keyword': keyword,
                             'timestamp': datetime.now().isoformat()
                         })
 
                         collected += 1
+                        logger.debug(f"Collected video {collected}: {title[:50]}...")
 
                     except Exception as e:
-                        logger.warning(f"Error extracting video data: {e}")
+                        logger.debug(f"Error extracting from rich item: {e}")
                         continue
+
+                # Strategy 2: Classic search results (ytd-video-renderer)
+                if collected < max_results:
+                    video_renderers = await page.query_selector_all('ytd-video-renderer')
+                    for video in video_renderers:
+                        if collected >= max_results:
+                            break
+
+                        try:
+                            # Check if we already have this video
+                            title_elem = await video.query_selector('a#video-title')
+                            if not title_elem:
+                                continue
+
+                            title = await title_elem.get_attribute('title') or await title_elem.inner_text()
+
+                            # Skip if already collected
+                            if any(r['title'] == title.strip() for r in results):
+                                continue
+
+                            link = await title_elem.get_attribute('href')
+                            if not link:
+                                continue
+
+                            if not link.startswith('http'):
+                                link = f"https://www.youtube.com{link}"
+
+                            # Channel
+                            channel_elem = await video.query_selector('ytd-channel-name a, a.yt-simple-endpoint')
+                            channel = await channel_elem.inner_text() if channel_elem else "Unknown Channel"
+
+                            # Views
+                            views_elem = await video.query_selector('span.ytd-video-meta-block:first-child')
+                            views = await views_elem.inner_text() if views_elem else ""
+
+                            # Duration
+                            duration_elem = await video.query_selector('span.ytd-thumbnail-overlay-time-status-renderer')
+                            duration = await duration_elem.inner_text() if duration_elem else ""
+
+                            results.append({
+                                'title': title.strip(),
+                                'url': link,
+                                'channel': channel.strip(),
+                                'views': views.strip(),
+                                'duration': duration.strip(),
+                                'search_keyword': keyword,
+                                'timestamp': datetime.now().isoformat()
+                            })
+
+                            collected += 1
+                            logger.debug(f"Collected video {collected}: {title[:50]}...")
+
+                        except Exception as e:
+                            logger.debug(f"Error extracting from video renderer: {e}")
+                            continue
+
+                # Check if we found new results
+                if collected == previous_count:
+                    consecutive_no_new += 1
+                    if consecutive_no_new >= 3:
+                        logger.info(f"No new results after 3 attempts, stopping at {collected} results")
+                        break
+                else:
+                    consecutive_no_new = 0
 
                 # Scroll down with human-like behavior
                 if collected < max_results:
-                    await self.behavior_modeler.human_scroll(page)
-                    await self.behavior_modeler.human_delay(1, 3)
+                    # Scroll more aggressively
+                    await page.evaluate('window.scrollBy(0, window.innerHeight * 2)')
+                    await self.behavior_modeler.human_delay(1.5, 3)
+
+                    # Sometimes click "Show more results" if available
+                    try:
+                        show_more = await page.query_selector('button[aria-label*="Show more"], yt-next-continuation button')
+                        if show_more:
+                            await show_more.click()
+                            await self.behavior_modeler.human_delay(1, 2)
+                    except:
+                        pass
+
                     scroll_attempts += 1
 
+            logger.info(f"Search completed: found {len(results)} results for '{keyword}'")
+
         except Exception as e:
-            logger.error(f"Search error: {e}")
+            logger.error(f"Search error: {e}", exc_info=True)
 
         return results
 
@@ -485,11 +620,28 @@ class YouTubeSearchBot:
     async def _get_available_browser(self) -> Browser:
         """Get an available browser from pool or create new one"""
         if not self.browser_pool:
+            logger.info("No browsers in pool, creating new one...")
             browser = await self._create_stealth_browser()
             self.browser_pool.append(browser)
 
         # Simple round-robin selection
-        return random.choice(self.browser_pool)
+        browser = random.choice(self.browser_pool)
+
+        # Check if browser is still connected
+        try:
+            contexts = browser.contexts
+            if not contexts:
+                logger.warning("Browser has no contexts, creating new browser...")
+                self.browser_pool.remove(browser)
+                browser = await self._create_stealth_browser()
+                self.browser_pool.append(browser)
+        except:
+            logger.warning("Browser disconnected, creating new browser...")
+            self.browser_pool.remove(browser)
+            browser = await self._create_stealth_browser()
+            self.browser_pool.append(browser)
+
+        return browser
 
     async def scale_up(self, target_browsers: int):
         """Scale up browser pool"""
@@ -700,23 +852,46 @@ class CaptchaSolver:
 # Main execution
 async def main():
     """Main entry point"""
-    bot = YouTubeSearchBot(max_browsers=5)
-    await bot.initialize()
+    print("🤖 YouTube Search Bot Starting...")
+    print("=" * 50)
+
+    bot = YouTubeSearchBot(max_browsers=1)  # Start with 1 browser for testing
 
     try:
-        # Example search
-        results = await bot.search("python programming", max_results=10)
+        print("Initializing bot components...")
+        await bot.initialize()
+        print("✅ Bot initialized successfully!")
 
-        print(f"\nFound {len(results)} results:")
-        for i, result in enumerate(results, 1):
-            print(f"{i}. {result['title']}")
-            print(f"   URL: {result['url']}")
-            print(f"   Channel: {result['channel']}")
-            print(f"   Views: {result['views']}")
-            print()
+        # Example search
+        keyword = "python programming"
+        print(f"\nPerforming test search for: '{keyword}'")
+        print("This may take a moment...")
+
+        results = await bot.search(keyword, max_results=5)
+
+        if results:
+            print(f"\n✅ Found {len(results)} results:")
+            for i, result in enumerate(results, 1):
+                print(f"\n{i}. {result['title']}")
+                print(f"   URL: {result['url']}")
+                print(f"   Channel: {result['channel']}")
+                print(f"   Views: {result['views']}")
+        else:
+            print("\n❌ No results found!")
+            print("\nTroubleshooting:")
+            print("1. Run 'python test_search.py' for detailed debugging")
+            print("2. Check if YouTube is accessible in your browser")
+            print("3. You might need to configure proxies")
+            print("4. See TROUBLESHOOTING.md for more help")
+
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        print("\nFor debugging, run: python test_search.py")
 
     finally:
+        print("\nCleaning up...")
         await bot.cleanup()
+        print("✅ Bot shutdown complete")
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ from playwright.async_api import Page, Frame
 import aiohttp
 import json
 import time
+import random  # Add this import
 
 logger = logging.getLogger(__name__)
 
