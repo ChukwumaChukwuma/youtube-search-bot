@@ -218,9 +218,35 @@
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 15px;
-            padding: 20px;
+            padding: 0;
             transition: all 0.3s ease;
             cursor: pointer;
+            overflow: hidden;
+        }
+
+        .video-thumbnail-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            overflow: hidden;
+        }
+
+        .video-thumbnail {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .video-card:hover .video-thumbnail {
+            transform: scale(1.05);
+        }
+
+        .video-content {
+            padding: 20px;
         }
 
         .video-card:hover {
@@ -262,11 +288,33 @@
         }
 
         .video-duration {
-            background: rgba(0, 0, 0, 0.7);
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.8);
             padding: 4px 8px;
             border-radius: 6px;
             font-size: 12px;
             color: white;
+            font-weight: bold;
+        }
+
+        .video-description {
+            color: #a1a1aa;
+            font-size: 13px;
+            margin: 8px 0;
+            line-height: 1.4;
+        }
+
+        .video-stats {
+            display: flex;
+            gap: 10px;
+            font-size: 12px;
+            color: #a1a1aa;
+        }
+
+        .video-upload-time {
+            color: #a1a1aa;
         }
 
         .video-link {
@@ -558,19 +606,31 @@
             const card = document.createElement('div');
             card.className = 'video-card';
             
-            card.innerHTML = `
-                <div class="video-title">${escapeHtml(video.title)}</div>
-                <div class="video-meta">
-                    <div class="video-channel">
-                        <i class="fas fa-user-circle"></i> ${escapeHtml(video.channel)}
-                    </div>
+            const thumbnailHtml = video.thumbnail ? 
+                `<div class="video-thumbnail-container">
+                    <img src="${escapeHtml(video.thumbnail)}" alt="${escapeHtml(video.title)}" class="video-thumbnail" onerror="this.style.display='none'">
                     ${video.duration ? `<div class="video-duration">${escapeHtml(video.duration)}</div>` : ''}
+                 </div>` : '';
+            
+            card.innerHTML = `
+                ${thumbnailHtml}
+                <div class="video-content">
+                    <div class="video-title">${escapeHtml(video.title)}</div>
+                    ${video.description ? `<div class="video-description">${escapeHtml(video.description.substring(0, 100))}${video.description.length > 100 ? '...' : ''}</div>` : ''}
+                    <div class="video-meta">
+                        <div class="video-channel">
+                            <i class="fas fa-user-circle"></i> ${escapeHtml(video.channel)}
+                        </div>
+                        <div class="video-stats">
+                            ${video.views ? `<span class="video-views">${escapeHtml(video.views)}</span>` : ''}
+                            ${video.upload_time ? `<span class="video-upload-time">${escapeHtml(video.upload_time)}</span>` : ''}
+                        </div>
+                    </div>
+                    <a href="${video.url}" target="_blank" class="video-link">
+                        <i class="fas fa-external-link-alt"></i>
+                        Watch on YouTube
+                    </a>
                 </div>
-                <div class="video-views">${escapeHtml(video.views)}</div>
-                <a href="${video.url}" target="_blank" class="video-link">
-                    <i class="fas fa-external-link-alt"></i>
-                    Watch on YouTube
-                </a>
             `;
 
             card.addEventListener('click', (e) => {

@@ -496,6 +496,20 @@ class YouTubeSearchBot:
                         duration_elem = await item.query_selector('span.ytd-thumbnail-overlay-time-status-renderer, ytd-thumbnail-overlay-time-status-renderer span')
                         duration = await duration_elem.inner_text() if duration_elem else ""
 
+                        # Thumbnail
+                        thumbnail_elem = await item.query_selector('img.yt-core-image, img')
+                        thumbnail = ""
+                        if thumbnail_elem:
+                            thumbnail = await thumbnail_elem.get_attribute('src')
+                            if not thumbnail:
+                                thumbnail = await thumbnail_elem.get_attribute('data-src')
+                            if thumbnail and not thumbnail.startswith('http'):
+                                thumbnail = f"https:{thumbnail}" if thumbnail.startswith('//') else f"https://www.youtube.com{thumbnail}"
+
+                        # Description/snippet
+                        description_elem = await item.query_selector('yt-formatted-string.ytd-video-renderer[aria-label], #description-text, .metadata-snippet-text')
+                        description = await description_elem.inner_text() if description_elem else ""
+
                         results.append({
                             'title': title.strip(),
                             'url': link,
@@ -503,6 +517,8 @@ class YouTubeSearchBot:
                             'views': views.strip(),
                             'duration': duration.strip(),
                             'upload_time': upload_time.strip(),
+                            'thumbnail': thumbnail,
+                            'description': description.strip(),
                             'search_keyword': keyword,
                             'timestamp': datetime.now().isoformat()
                         })
@@ -552,12 +568,33 @@ class YouTubeSearchBot:
                             duration_elem = await video.query_selector('span.ytd-thumbnail-overlay-time-status-renderer')
                             duration = await duration_elem.inner_text() if duration_elem else ""
 
+                            # Upload time
+                            upload_elem = await video.query_selector('span.ytd-video-meta-block:last-child')
+                            upload_time = await upload_elem.inner_text() if upload_elem else ""
+
+                            # Thumbnail
+                            thumbnail_elem = await video.query_selector('img.yt-core-image, img')
+                            thumbnail = ""
+                            if thumbnail_elem:
+                                thumbnail = await thumbnail_elem.get_attribute('src')
+                                if not thumbnail:
+                                    thumbnail = await thumbnail_elem.get_attribute('data-src')
+                                if thumbnail and not thumbnail.startswith('http'):
+                                    thumbnail = f"https:{thumbnail}" if thumbnail.startswith('//') else f"https://www.youtube.com{thumbnail}"
+
+                            # Description
+                            description_elem = await video.query_selector('#description-text, .metadata-snippet-text')
+                            description = await description_elem.inner_text() if description_elem else ""
+
                             results.append({
                                 'title': title.strip(),
                                 'url': link,
                                 'channel': channel.strip(),
                                 'views': views.strip(),
                                 'duration': duration.strip(),
+                                'upload_time': upload_time.strip(),
+                                'thumbnail': thumbnail,
+                                'description': description.strip(),
                                 'search_keyword': keyword,
                                 'timestamp': datetime.now().isoformat()
                             })
