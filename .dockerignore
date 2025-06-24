@@ -11,3 +11,45 @@ tmp/
 models/
 *.dmp
 *.meta
+# YOLO models (large files)
+*.pt
+models/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Git
+.git/
+.gitignore
+
+# Development
+tests/
+docs/
+*.md
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Virtual environments
+venv/
+env/
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Config cache
+.config/chromium/

@@ -1,11 +1,10 @@
-{pkgs} : {
+
+{ pkgs }: {
   deps = [
-    pkgs.wget
-    pkgs.playwright-driver
-    pkgs.gitFull
+    pkgs.openssl
+    pkgs.pkg-config
+    pkgs.which
+    # Remove playwright-driver for lighter deployment
+    # pkgs.playwright-driver
   ];
-  env = {
-    PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
-    PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = true;
-  };
 }
