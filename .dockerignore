@@ -1,0 +1,13 @@
+
+*.pt
+__pycache__/
+*.pyc
+.git/
+node_modules/
+*.log
+tmp/
+.cache/
+.config/chromium/
+models/
+*.dmp
+*.meta

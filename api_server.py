@@ -349,7 +349,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize bot manager
     bot_manager = BotManager()
-    initial_bots = int(os.getenv('INITIAL_BOTS', '5'))
+    initial_bots = int(os.getenv('INITIAL_BOTS', '1'))
     await bot_manager.initialize(initial_bots)
 
     # Initialize auto-scaler

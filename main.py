@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class YouTubeSearchBot:
-    def __init__(self, max_browsers: int = 10):
+    def __init__(self, max_browsers: int = 2):
         self.max_browsers = max_browsers
         self.browser_pool = []
         self.fingerprint_manager = FingerprintManager()
@@ -43,7 +43,7 @@ class YouTubeSearchBot:
 
     async def _create_browser_pool(self):
         """Create a pool of browser instances"""
-        for i in range(min(self.max_browsers, 5)):  # Start with 5 browsers
+        for i in range(min(self.max_browsers, 1)):  # Start with 1 browser for deployment
             browser = await self._create_stealth_browser()
             self.browser_pool.append(browser)
 

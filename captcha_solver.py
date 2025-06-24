@@ -60,7 +60,7 @@ class YOLOCaptchaSolver:
             from ultralytics import YOLO
 
             # Load pretrained YOLO11 model for object detection
-            self.model = YOLO('yolov11x.pt')  # Using largest model for best accuracy
+            self.model = YOLO('yolov11n.pt')  # Using nano model for deployment efficiency
             self.model.to(self.device)
 
             logger.info("YOLO V11 initialized successfully")
