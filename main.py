@@ -15,13 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 import aiohttp
 import uuid
 import cv2
-# Optional ML imports for development
-try:
-    import torch
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    
+import torch
 from PIL import Image
 import io
 

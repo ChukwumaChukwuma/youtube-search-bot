@@ -53,18 +53,24 @@ class YOLOCaptchaSolver:
         self.iou_threshold = 0.45
 
     async def initialize(self):
-        """Initialize CAPTCHA solver (ML features disabled for deployment)"""
+        """Initialize YOLO V11 model"""
         try:
-            # ML features disabled to reduce deployment size
-            logger.info("CAPTCHA solver initialized in lightweight mode (ML features disabled)")
-            self.yolo_initialized = False
+            # Load YOLO V11 model
+            # Using ultralytics YOLO V11
+            from ultralytics import YOLO
 
-            # For production deployment, consider using external ML APIs instead
-            # such as Google Vision API, AWS Rekognition, or similar services
+            # Load pretrained YOLO11 model for object detection
+            self.model = YOLO('yolov11x.pt')  # Using largest model for best accuracy
+            self.model.to(self.device)
+
+            logger.info("YOLO V11 initialized successfully")
+            return True
 
         except Exception as e:
-            logger.error(f"Error initializing CAPTCHA solver: {e}")
-            self.yolo_initialized = False
+            logger.error(f"Failed to initialize YOLO V11: {e}")
+            # Fallback to downloading if not present
+            await self._download_model()
+            return await self.initialize()
 
     async def _download_model(self):
         """Download YOLO V11 model if not present"""
