@@ -1,9 +1,12 @@
 entrypoint = "main.py"
 modules = ["python-3.11"]
 
+[env]
+REPLIT_DISABLE_PACKAGE_LAYER = "1"
+
 [nix]
 channel = "stable-24_05"
-packages = ["cargo", "freetype", "gitFull", "glibcLocales", "lcms2", "libGL", "libGLU", "libiconv", "libimagequant", "libjpeg", "libjpeg_turbo", "libpng", "libtiff", "libwebp", "libxcrypt", "openjpeg", "openssl", "pkg-config", "playwright-driver", "rustc", "tcl", "tk", "which", "zlib"]
+packages = ["openssl", "pkg-config", "playwright-driver", "which"]
 
 [unitTest]
 language = "python3"
@@ -12,7 +15,7 @@ language = "python3"
 requiredFiles = [".replit", "replit.nix"]
 
 [deployment]
-run = ["python3", "main.py"]
+run = ["sh", "-c", "DEPLOYMENT_MODE=1 python main.py"]
 deploymentTarget = "cloudrun"
 
 [workflows]
@@ -39,15 +42,11 @@ args = "python api_server.py"
 [[workflows.workflow]]
 name = "Start Full Stack"
 author = 38222619
-mode = "parallel"
+mode = "sequential"
 
 [[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python api_server.py"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python web_server.py"
+task = "shell.exec" 
+args = "python main.py"
 
 [[ports]]
 localPort = 5000
