@@ -4,7 +4,7 @@ import random
 import time
 import hashlib
 import base64
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from playwright.async_api import async_playwright, Page, Browser, BrowserContext
 import numpy as np
 from datetime import datetime
@@ -14,6 +14,10 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 import aiohttp
 import uuid
+import cv2
+import torch
+from PIL import Image
+import io
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -755,46 +759,205 @@ class BehaviorModeler:
 
 
 class ProxyManager:
-    """Manages proxy rotation for stealth"""
+    """Manages proxy rotation for production use"""
 
     def __init__(self):
         self.proxies = []
         self.current_index = 0
+        self.proxy_providers = []
+        self.last_rotation_time = time.time()
+        self.rotation_interval = 300  # Rotate every 5 minutes
 
     async def initialize(self):
-        """Initialize proxy list"""
-        # In production, this would load from a proxy provider
-        # For now, we'll use direct connection
-        logger.info("Proxy manager initialized (using direct connection in dev)")
+        """Initialize proxy list from environment or config"""
+        # Load proxy configuration from environment
+        proxy_config = os.getenv('PROXY_CONFIG', '')
+
+        if proxy_config:
+            # Parse proxy configuration
+            try:
+                config = json.loads(proxy_config)
+                self.proxy_providers = config.get('providers', [])
+                await self._load_proxies()
+            except json.JSONDecodeError:
+                logger.warning("Invalid proxy configuration, using direct connection")
+        else:
+            # Check for individual proxy settings
+            proxy_url = os.getenv('PROXY_URL')
+            if proxy_url:
+                proxy_user = os.getenv('PROXY_USER', '')
+                proxy_pass = os.getenv('PROXY_PASS', '')
+
+                self.proxies.append({
+                    'server': proxy_url,
+                    'username': proxy_user,
+                    'password': proxy_pass
+                })
+                logger.info(f"Loaded {len(self.proxies)} proxies from environment")
+            else:
+                logger.info("No proxy configuration found, using direct connection")
+
+    async def _load_proxies(self):
+        """Load proxies from providers"""
+        for provider in self.proxy_providers:
+            try:
+                if provider['type'] == 'static':
+                    # Static proxy list
+                    for proxy in provider['proxies']:
+                        self.proxies.append({
+                            'server': f"{proxy['protocol']}://{proxy['host']}:{proxy['port']}",
+                            'username': proxy.get('username', ''),
+                            'password': proxy.get('password', '')
+                        })
+                elif provider['type'] == 'api':
+                    # Dynamic proxy API
+                    proxies = await self._fetch_proxies_from_api(provider)
+                    self.proxies.extend(proxies)
+
+            except Exception as e:
+                logger.error(f"Error loading proxies from provider: {e}")
+
+        logger.info(f"Total proxies loaded: {len(self.proxies)}")
+
+    async def _fetch_proxies_from_api(self, provider: Dict) -> List[Dict]:
+        """Fetch proxies from provider API"""
+        proxies = []
+        try:
+            async with aiohttp.ClientSession() as session:
+                headers = {'Authorization': f"Bearer {provider.get('api_key', '')}"}
+                async with session.get(provider['endpoint'], headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        for proxy in data.get('proxies', []):
+                            proxies.append({
+                                'server': f"{proxy['protocol']}://{proxy['host']}:{proxy['port']}",
+                                'username': proxy.get('username', ''),
+                                'password': proxy.get('password', '')
+                            })
+        except Exception as e:
+            logger.error(f"Error fetching proxies from API: {e}")
+
+        return proxies
 
     async def get_proxy(self) -> Optional[Dict]:
         """Get next proxy from rotation"""
-        # In production, implement proxy rotation here
-        # Return None for direct connection
-        return None
+        # Check if rotation is needed
+        if time.time() - self.last_rotation_time > self.rotation_interval:
+            await self._rotate_proxies()
+
+        if not self.proxies:
+            return None
+
+        # Get next proxy in rotation
+        proxy = self.proxies[self.current_index]
+        self.current_index = (self.current_index + 1) % len(self.proxies)
+
+        return proxy
+
+    async def _rotate_proxies(self):
+        """Rotate proxy list"""
+        if self.proxy_providers:
+            # Reload proxies from providers
+            old_count = len(self.proxies)
+            self.proxies.clear()
+            await self._load_proxies()
+            logger.info(f"Rotated proxies: {old_count} -> {len(self.proxies)}")
+
+        self.last_rotation_time = time.time()
+        self.current_index = 0
 
 
 class CaptchaSolver:
-    """CAPTCHA solving using YOLO V11"""
+    """Production-ready CAPTCHA solving using YOLO V11"""
 
     def __init__(self):
         self.yolo_initialized = False
         self.model = None
+        self.device = None
+        self.object_classes = {
+            'traffic light': ['traffic light', 'traffic_light', 'signal'],
+            'fire hydrant': ['fire hydrant', 'hydrant'],
+            'bicycle': ['bicycle', 'bike'],
+            'car': ['car', 'automobile'],
+            'motorcycle': ['motorcycle', 'motorbike'],
+            'bus': ['bus'],
+            'truck': ['truck'],
+            'boat': ['boat', 'ship'],
+            'train': ['train'],
+            'airplane': ['airplane', 'aeroplane'],
+            'stop sign': ['stop sign'],
+            'parking meter': ['parking meter', 'meter'],
+            'bench': ['bench'],
+            'bird': ['bird'],
+            'cat': ['cat'],
+            'dog': ['dog'],
+            'horse': ['horse'],
+            'sheep': ['sheep'],
+            'cow': ['cow'],
+            'elephant': ['elephant'],
+            'bear': ['bear'],
+            'zebra': ['zebra'],
+            'giraffe': ['giraffe'],
+            'backpack': ['backpack'],
+            'umbrella': ['umbrella'],
+            'handbag': ['handbag', 'bag'],
+            'tie': ['tie'],
+            'suitcase': ['suitcase'],
+            'frisbee': ['frisbee'],
+            'skis': ['skis', 'ski'],
+            'snowboard': ['snowboard'],
+            'sports ball': ['sports ball', 'ball'],
+            'kite': ['kite'],
+            'baseball bat': ['baseball bat', 'bat'],
+            'baseball glove': ['baseball glove', 'glove'],
+            'skateboard': ['skateboard'],
+            'surfboard': ['surfboard'],
+            'tennis racket': ['tennis racket', 'racket'],
+        }
 
     async def initialize(self):
         """Initialize YOLO V11 for CAPTCHA solving"""
         try:
-            # Import YOLO v11 dependencies
-            import torch
-            import cv2
+            # Check for CUDA availability
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            logger.info(f"Using device: {self.device}")
 
-            # For production, we would load the actual YOLO v11 model
-            # This is a placeholder that shows the structure
-            logger.info("CAPTCHA solver initialized with YOLO V11 support")
-            self.yolo_initialized = True
+            # Try to load YOLO model
+            try:
+                from ultralytics import YOLO
 
-        except ImportError:
-            logger.warning("YOLO dependencies not found, CAPTCHA solving limited")
+                # Check if model exists locally first
+                model_path = 'yolov11x.pt'
+                if not os.path.exists(model_path):
+                    # Try alternative paths
+                    alt_paths = [
+                        'models/yolov11x.pt',
+                        '../models/yolov11x.pt',
+                        os.path.join(os.path.dirname(__file__), 'models', 'yolov11x.pt')
+                    ]
+
+                    for alt_path in alt_paths:
+                        if os.path.exists(alt_path):
+                            model_path = alt_path
+                            break
+                    else:
+                        # Download model if not found
+                        logger.info("YOLO model not found locally, downloading...")
+                        self.model = YOLO('yolov11x.pt')
+                else:
+                    self.model = YOLO(model_path)
+
+                self.model.to(self.device)
+                self.yolo_initialized = True
+                logger.info("YOLO V11 initialized successfully for CAPTCHA solving")
+
+            except ImportError:
+                logger.warning("Ultralytics not installed. Install with: pip install ultralytics")
+                self.yolo_initialized = False
+
+        except Exception as e:
+            logger.error(f"Error initializing YOLO: {e}")
+            self.yolo_initialized = False
 
     async def solve_captcha(self, page: Page) -> bool:
         """Solve CAPTCHA on the page"""
@@ -815,9 +978,9 @@ class CaptchaSolver:
                     # Check if challenge appeared
                     challenge_frame = await page.query_selector('iframe[title*="challenge"]')
                     if challenge_frame:
-                        # This is where YOLO V11 would analyze the images
-                        # For now, we'll implement the structure
-                        await self._solve_image_challenge(page, challenge_frame)
+                        # Solve the image challenge
+                        success = await self._solve_image_challenge(page, challenge_frame)
+                        return success
 
             return True
 
@@ -826,27 +989,187 @@ class CaptchaSolver:
             return False
 
     async def _solve_image_challenge(self, page: Page, challenge_frame):
-        """Solve image-based CAPTCHA challenge"""
-        # In production, this would:
-        # 1. Take screenshot of challenge
-        # 2. Extract individual images
-        # 3. Use YOLO V11 to detect objects
-        # 4. Click on matching images
-        # 5. Submit solution
+        """Solve image-based CAPTCHA challenge using YOLO V11"""
+        if not self.yolo_initialized:
+            logger.error("YOLO not initialized, cannot solve image CAPTCHA")
+            return False
 
-        frame = await challenge_frame.content_frame()
-        if not frame:
-            return
+        try:
+            frame = await challenge_frame.content_frame()
+            if not frame:
+                return False
 
-        # Get challenge type
-        challenge_text = await frame.query_selector('.rc-imageselect-desc-no-canonical')
-        if challenge_text:
-            text = await challenge_text.inner_text()
-            logger.info(f"CAPTCHA challenge: {text}")
+            # Get challenge type
+            challenge_elem = await frame.query_selector('.rc-imageselect-desc-no-canonical, .rc-imageselect-desc')
+            if not challenge_elem:
+                return False
 
-        # This is where we would implement YOLO V11 detection
-        # For the structure, we show how it would work
-        await asyncio.sleep(2)  # Simulate processing time
+            challenge_text = await challenge_elem.inner_text()
+            logger.info(f"CAPTCHA challenge: {challenge_text}")
+
+            # Extract target object from challenge text
+            target_object = self._extract_target_object(challenge_text)
+            if not target_object:
+                logger.error(f"Could not identify target object from: {challenge_text}")
+                return False
+
+            logger.info(f"Looking for: {target_object}")
+
+            # Get grid type (3x3 or 4x4)
+            grid_size = await self._get_grid_size(frame)
+
+            # Take screenshot of challenge area
+            table_elem = await frame.query_selector('.rc-imageselect-table-3, .rc-imageselect-table-4, .rc-imageselect-table-33, .rc-imageselect-table-44')
+            if not table_elem:
+                return False
+
+            # Get all tile images
+            tiles = await frame.query_selector_all('.rc-imageselect-tile')
+            detected_tiles = []
+
+            for i, tile in enumerate(tiles):
+                try:
+                    # Take screenshot of individual tile
+                    tile_screenshot = await tile.screenshot()
+
+                    # Convert to numpy array for YOLO
+                    nparr = np.frombuffer(tile_screenshot, np.uint8)
+                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                    # Run YOLO detection
+                    results = self.model(img)
+
+                    # Check if target object is detected
+                    for result in results:
+                        if result.boxes is not None:
+                            for box in result.boxes:
+                                class_id = int(box.cls)
+                                class_name = self.model.names[class_id].lower()
+                                confidence = float(box.conf)
+
+                                # Check if detected object matches target
+                                if self._matches_target(class_name, target_object) and confidence > 0.3:
+                                    detected_tiles.append(i)
+                                    logger.info(f"Detected {class_name} in tile {i} with confidence {confidence:.2f}")
+                                    break
+
+                except Exception as e:
+                    logger.error(f"Error processing tile {i}: {e}")
+                    continue
+
+            # Click detected tiles
+            if detected_tiles:
+                logger.info(f"Clicking tiles: {detected_tiles}")
+                for tile_index in detected_tiles:
+                    await tiles[tile_index].click()
+                    await asyncio.sleep(random.uniform(0.5, 1.0))
+
+                # Submit solution
+                verify_button = await frame.query_selector('#recaptcha-verify-button')
+                if verify_button:
+                    await asyncio.sleep(1)
+                    await verify_button.click()
+
+                # Wait to see if solved
+                await asyncio.sleep(3)
+
+                # Check if we need to solve more (dynamic challenge)
+                new_tiles = await frame.query_selector_all('.rc-imageselect-tile')
+                if len(new_tiles) > 0:
+                    # Some tiles refreshed, solve again
+                    logger.info("Dynamic challenge detected, solving new tiles...")
+                    return await self._solve_image_challenge(page, challenge_frame)
+
+                return True
+            else:
+                logger.warning(f"No tiles detected with {target_object}")
+                # Click verify anyway in case it's a test
+                verify_button = await frame.query_selector('#recaptcha-verify-button')
+                if verify_button:
+                    await verify_button.click()
+                return False
+
+        except Exception as e:
+            logger.error(f"Error in image challenge solving: {e}")
+            return False
+
+    def _extract_target_object(self, challenge_text: str) -> Optional[str]:
+        """Extract the target object from challenge text"""
+        challenge_text = challenge_text.lower()
+
+        # Common patterns
+        patterns = [
+            r'select all (?:images|squares) with (?:a |an )?(.+?)(?:\.|$)',
+            r'select all (?:images|squares) containing (?:a |an )?(.+?)(?:\.|$)',
+            r'(?:click|select) (?:on |all )?(?:the )?(.+?)(?:\.|$)',
+            r'(?:images|squares) with (?:a |an )?(.+?)(?:\.|$)',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, challenge_text)
+            if match:
+                target = match.group(1).strip()
+                # Remove common suffixes
+                target = re.sub(r'\s*(?:images?|squares?|photos?|pictures?)$', '', target)
+                return target
+
+        # Fallback: look for known objects in text
+        for obj in self.object_classes.keys():
+            if obj in challenge_text:
+                return obj
+
+        return None
+
+    def _matches_target(self, detected_class: str, target_object: str) -> bool:
+        """Check if detected class matches target object"""
+        # Direct match
+        if detected_class == target_object:
+            return True
+
+        # Check aliases
+        if target_object in self.object_classes:
+            return detected_class in self.object_classes[target_object]
+
+        # Fuzzy matching for common variations
+        if target_object in detected_class or detected_class in target_object:
+            return True
+
+        # Special cases
+        special_cases = {
+            'vehicles': ['car', 'truck', 'bus', 'motorcycle', 'bicycle'],
+            'traffic lights': ['traffic light'],
+            'crosswalks': ['crosswalk', 'zebra crossing'],
+            'bikes': ['bicycle', 'motorcycle'],
+            'store fronts': ['storefront', 'shop', 'store'],
+        }
+
+        if target_object in special_cases:
+            return detected_class in special_cases[target_object]
+
+        return False
+
+    async def _get_grid_size(self, frame) -> Tuple[int, int]:
+        """Determine if it's a 3x3 or 4x4 grid"""
+        # Check for specific table classes
+        table_3x3 = await frame.query_selector('.rc-imageselect-table-3, .rc-imageselect-table-33')
+        if table_3x3:
+            return (3, 3)
+
+        table_4x4 = await frame.query_selector('.rc-imageselect-table-4, .rc-imageselect-table-44')
+        if table_4x4:
+            return (4, 4)
+
+        # Fallback: count tiles
+        tiles = await frame.query_selector_all('.rc-imageselect-tile')
+        tile_count = len(tiles)
+
+        if tile_count == 9:
+            return (3, 3)
+        elif tile_count == 16:
+            return (4, 4)
+        else:
+            logger.warning(f"Unexpected tile count: {tile_count}")
+            return (3, 3)  # Default
 
 
 # Main execution
