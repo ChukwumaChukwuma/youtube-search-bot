@@ -1,0 +1,32 @@
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Development files
+.git/
+.gitignore
+*.log
+.pytest_cache/
+.coverage
+.DS_Store
+
+# Node modules (if any)
+node_modules/
+
+# Large model files
+*.pt
+*.pth
+models/
+yolov11x.pt
+
+# Browser cache and crash reports
+.config/
