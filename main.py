@@ -1218,13 +1218,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    # Check if we should run as server (for deployment)
-    import os
-    if os.getenv('DEPLOYMENT_MODE'):
-        # Run API server for deployment
-        import uvicorn
-        from api_server import app
-        uvicorn.run(app, host="0.0.0.0", port=5000)
-    else:
-        # Run interactive demo
-        asyncio.run(main())
+    asyncio.run(main())
