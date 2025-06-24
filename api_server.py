@@ -349,7 +349,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize bot manager
     bot_manager = BotManager()
-    initial_bots = int(os.getenv('INITIAL_BOTS', '1'))
+    initial_bots = int(os.getenv('INITIAL_BOTS', '5'))
     await bot_manager.initialize(initial_bots)
 
     # Initialize auto-scaler
@@ -391,22 +391,9 @@ async def health_check():
 # System status endpoint
 @app.get("/status", response_model=SystemStatus)
 async def get_status():
-    """Get system status"""
-    try:
-        return {
-            "status": "online",
-            "active_searches": getattr(bot_manager, 'active_searches', 0),
-            "total_bots": len(getattr(bot_manager, 'bots', [])),
-            "timestamp": datetime.now().isoformat(),
-            "ml_available": hasattr(bot_manager, 'bots') and len(bot_manager.bots) > 0
-        }
-    except Exception as e:
-        logger.error(f"Status endpoint error: {e}")
-        return {
-            "status": "error",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
+    if not bot_manager:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+    return bot_manager.get_system_status()
 
 # Submit search endpoint
 @app.post("/search", response_model=SearchResponse)
